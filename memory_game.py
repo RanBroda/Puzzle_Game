@@ -32,6 +32,16 @@ CARD_BORDER_COLOR = (0, 0, 0)
 TIMEREVENT = pygame.USEREVENT + 1
 pygame.time.set_timer(TIMEREVENT, 1000)
 
+# Define the button dimensions and position
+reset_button_color = (70, 130, 180)  # SteelBlue color
+reset_button_rect = pygame.Rect(SCREEN_WIDTH - 150, SCREEN_HEIGHT - 50, 140, 40)  # Position and size
+reset_button_text = "Reset Game"
+
+# Play Again button setup
+play_again_button_color = (34, 139, 34)  # Forest Green color
+play_again_button_rect = pygame.Rect(SCREEN_WIDTH // 2 - 70, SCREEN_HEIGHT // 2, 140, 40)  # Position and size
+play_again_button_text = "Play Again"
+
 # Cards setup
 NUM_PAIRS = 8
 CARD_SIZE = (80, 100)
@@ -57,6 +67,7 @@ def draw_board():
         pygame.draw.rect(screen, card_color, (*position, *CARD_SIZE))
         pygame.draw.rect(screen, CARD_BORDER_COLOR, (*position, *CARD_SIZE), 3)
 
+    # Draw timer on the screen
     current_time = pygame.time.get_ticks()  # Get current time in milliseconds
     elapsed_time = (current_time - start_time) // 1000  # Convert to seconds
     minutes = elapsed_time // 60
@@ -64,6 +75,12 @@ def draw_board():
     timer_text = f"{minutes:02}:{seconds:02}"  # Format as MM:SS
     timer_surface = font.render(timer_text, True, (255, 255, 255))  # Render the text
     screen.blit(timer_surface, (SCREEN_WIDTH - 100, 10))  # Position the text on screen
+
+    # Draw reset button the screen
+    pygame.draw.rect(screen, reset_button_color, reset_button_rect)
+    text_surface = font.render(reset_button_text, True, (255, 255, 255))
+    text_rect = text_surface.get_rect(center=reset_button_rect.center)
+    screen.blit(text_surface, text_rect)
 
 
 def game_logic(mouse_pos):
@@ -89,30 +106,57 @@ def game_logic(mouse_pos):
 
 
 def check_game_over():
-    return len(found_pairs) == len(cards)
+    if len(found_pairs) == len(cards):
+        draw_end_game()
+        return True
+    return False
 
+
+def draw_end_game():
+    # Draw "Well done!" message
+    message_text = "Well done!"
+    message_surface = font.render(message_text, True, (255, 215, 0))  # Gold color
+    message_rect = message_surface.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 40))
+    screen.blit(message_surface, message_rect)
+
+    # Draw "Play Again" button
+    pygame.draw.rect(screen, play_again_button_color, play_again_button_rect)
+    text_surface = font.render(play_again_button_text, True, (255, 255, 255))
+    text_rect = text_surface.get_rect(center=play_again_button_rect.center)
+    screen.blit(text_surface, text_rect)
 
 # Game loop
 running = True
-
+game_over = False
 while running:
     # Game loop start
     # Inside game loop
-
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
         elif event.type == pygame.MOUSEBUTTONDOWN:
-            game_logic(pygame.mouse.get_pos())
+            mouse_pos = pygame.mouse.get_pos()
             if check_game_over():
-                print("Game Over! Restarting...")
-                start_time = pygame.time.get_ticks()
+                if play_again_button_rect.collidepoint(mouse_pos):
+                #Reset game logic for playing again
+                    start_time = pygame.time.get_ticks()
+                    flipped_cards.clear()
+                    found_pairs.clear()
+                    random.shuffle(cards)
+                    game_over = False  # Reset game over status
+            elif reset_button_rect.collidepoint(mouse_pos):
+                # Reset game logic
+                start_time = pygame.time.get_ticks()  # Reset start time for new game
                 flipped_cards.clear()
                 found_pairs.clear()
                 random.shuffle(cards)
+            else:
+                game_logic(mouse_pos)
 
-    draw_board()
+    if not game_over:
+        draw_board()
     pygame.display.flip()
+    game_over = check_game_over() # Update game_over status after drawing
 
 pygame.quit()
 sys.exit()
