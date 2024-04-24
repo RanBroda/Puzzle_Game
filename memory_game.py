@@ -36,15 +36,6 @@ time_attack_mode = False
 time_left = 60  # Start with 60 seconds
 
 
-def update_timer():
-    global time_left, game_over
-    if time_attack_mode:
-        time_left -= 1
-        if time_left <= 0:
-            game_over = True  # Time's up, game over
-            time_left = 0
-
-
 # Define the reset button dimensions and position
 reset_button_color = (70, 130, 180)  # SteelBlue color
 reset_button_rect = pygame.Rect(SCREEN_WIDTH - 150, SCREEN_HEIGHT - 50, 140, 40)  # Position and size
@@ -74,7 +65,8 @@ card_positions = [(x * (CARD_SIZE[0] + 10) + 50, y * (CARD_SIZE[1] + 10) + 40) f
                   range(CARDS_PER_ROW)]
 cards = []
 for color in CARD_COLORS[:NUM_PAIRS]:
-    cards.extend([color, color])
+    cards.append({'color': color, 'flipped': False, 'animating': False, 'width': CARD_SIZE[0], 'front': True})
+    cards.append({'color': color, 'flipped': False, 'animating': False, 'width': CARD_SIZE[0], 'front': True})
 random.shuffle(cards)
 
 # Game variables
@@ -97,11 +89,17 @@ total_time = 60
 def draw_board():
     screen.fill(BG_COLOR)
     for index, position in enumerate(card_positions):
-        card_color = CARD_BACK_COLOR if index not in flipped_cards else cards[index]
-        if index in found_pairs:
-            continue
-        pygame.draw.rect(screen, card_color, (*position, *CARD_SIZE))
-        pygame.draw.rect(screen, CARD_BORDER_COLOR, (*position, *CARD_SIZE), 3)
+        card = cards[index]
+        if card['flipped'] or not card['front']:
+            color_card = card['color']
+        else:
+            color_card = CARD_BACK_COLOR
+
+        pos_x = position[0] + (CARD_SIZE[0] - card['width']) // 2
+        pygame.draw.rect(screen, color_card, (pos_x, position[1], card['width'], CARD_SIZE[1]))
+
+        if card['animating']:
+            animate_card(index)
 
     if not time_attack_mode:
         # Draw timer on the screen
@@ -138,15 +136,49 @@ def handle_game_over():
     print("Time's up! Game Over!")  # This is just a placeholder. Update it according to your game's design.
 
 
+def animate_card(index):
+    card = cards[index]
+    if card['animating']:
+        if not card['flipped']:
+            if card['width'] > 0 and card['front']:
+                card['width'] -= 2.5  # Speed of animation
+            elif card['width'] <= 0:
+                card['front'] = not card['front']
+                card['width'] += 2.5
+            else:
+                card['width'] += 2.5
+                if card['width'] == CARD_SIZE[0]:
+                    card['animating'] = False
+                    card['flipped'] = True
+        else:
+            if card['width'] > 0 and not card['front']:
+                card['width'] -= 2.5  # Speed of animation
+            elif card['width'] <= 0:
+                card['front'] = not card['front']
+                card['width'] += 2.5
+            else:
+                card['width'] += 2.5
+                if card['width'] == CARD_SIZE[0]:
+                    card['animating'] = False
+                    card['flipped'] = False
+
+
 def game_logic(mouse_pos):
     global flipped_cards, found_pairs, consecutive_matches, current_player
     for index, position in enumerate(card_positions):
-        if position[0] <= mouse_pos[0] <= position[0] + CARD_SIZE[0] and position[1] <= mouse_pos[1] <= position[1] + \
-                CARD_SIZE[1]:
-            if index in flipped_cards or index in found_pairs:
-                return
+        card = cards[index]
+        rect = pygame.Rect(*position, card['width'], CARD_SIZE[1])
+        if rect.collidepoint(mouse_pos) and not card['flipped'] and not card['animating']:
+            card['animating'] = True
             flipped_cards.append(index)
-            if len(flipped_cards) == 2:
+            while not card['flipped']:
+                draw_board()
+        # if position[0] <= mouse_pos[0] <= position[0] + CARD_SIZE[0] and position[1] <= mouse_pos[1] <= position[1] + \
+        #        CARD_SIZE[1]:
+        #    if index in flipped_cards or index in found_pairs:
+        #        return
+        #    flipped_cards.append(index)
+            if len(flipped_cards) == 2 and cards[flipped_cards[0]]['flipped'] and cards[flipped_cards[1]]['flipped']:
                 # Draw the board to show both flipped cards
                 draw_board()
                 pygame.display.flip()  # Update the screen to show changes
@@ -154,7 +186,7 @@ def game_logic(mouse_pos):
                 # Delay added here to allow the player to see the second card
                 pygame.time.wait(1000)
 
-                if cards[flipped_cards[0]] == cards[flipped_cards[1]]:
+                if cards[flipped_cards[0]]['color'] == cards[flipped_cards[1]]['color']:
                     found_pairs.extend(flipped_cards)
                     consecutive_matches += 1
                     if consecutive_matches == 2:
@@ -162,6 +194,11 @@ def game_logic(mouse_pos):
                         consecutive_matches = 0
                     match_sound.play()
                 else:  # No streak
+                    cards[flipped_cards[0]]['animating'] = True
+                    cards[flipped_cards[1]]['animating'] = True
+                    pygame.time.wait(500)
+                    draw_board()
+                    pygame.display.flip()
                     consecutive_matches = 0
                     if num_players == 2:
                         current_player = 2 if current_player == 1 else 1
@@ -179,7 +216,6 @@ def display_fire_message():
 
 
 def check_game_over():
-    print(time_left)
     if len(found_pairs) == len(cards):
         if time_attack_mode:
             global total_time
@@ -200,6 +236,7 @@ def reset_game():
     flipped_cards.clear()
     found_pairs.clear()
     random.shuffle(cards)
+    draw_board()
     current_player = 1
     if not time_attack_mode:
         time_left = 60  # Reset to default 60 seconds for time attack mode
