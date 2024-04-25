@@ -173,18 +173,13 @@ def game_logic(mouse_pos):
             flipped_cards.append(index)
             while not card['flipped']:
                 draw_board()
-        # if position[0] <= mouse_pos[0] <= position[0] + CARD_SIZE[0] and position[1] <= mouse_pos[1] <= position[1] + \
-        #        CARD_SIZE[1]:
-        #    if index in flipped_cards or index in found_pairs:
-        #        return
-        #    flipped_cards.append(index)
             if len(flipped_cards) == 2 and cards[flipped_cards[0]]['flipped'] and cards[flipped_cards[1]]['flipped']:
                 # Draw the board to show both flipped cards
                 draw_board()
                 pygame.display.flip()  # Update the screen to show changes
 
                 # Delay added here to allow the player to see the second card
-                pygame.time.wait(1000)
+                pygame.time.wait(500)
 
                 if cards[flipped_cards[0]]['color'] == cards[flipped_cards[1]]['color']:
                     found_pairs.extend(flipped_cards)
@@ -196,7 +191,7 @@ def game_logic(mouse_pos):
                 else:  # No streak
                     cards[flipped_cards[0]]['animating'] = True
                     cards[flipped_cards[1]]['animating'] = True
-                    pygame.time.wait(500)
+                    pygame.time.wait(250)
                     draw_board()
                     pygame.display.flip()
                     consecutive_matches = 0
@@ -212,7 +207,7 @@ def display_fire_message():
     fire_rect = fire_surface.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 1.5))
     screen.blit(fire_surface, fire_rect)
     pygame.display.flip()
-    pygame.time.wait(1000)  # Show the message for 1.5 seconds
+    pygame.time.wait(500)  # Show the message for 1.5 seconds
 
 
 def check_game_over():
@@ -235,6 +230,10 @@ def reset_game():
     start_time = pygame.time.get_ticks()
     flipped_cards.clear()
     found_pairs.clear()
+    cards.clear()
+    for color in CARD_COLORS[:NUM_PAIRS]:
+        cards.append({'color': color, 'flipped': False, 'animating': False, 'width': CARD_SIZE[0], 'front': True})
+        cards.append({'color': color, 'flipped': False, 'animating': False, 'width': CARD_SIZE[0], 'front': True})
     random.shuffle(cards)
     draw_board()
     current_player = 1
@@ -315,11 +314,7 @@ while running:
             if check_game_over():
                 if play_again_button_rect.collidepoint(mouse_pos):
                     # Reset game logic for playing again
-                    start_time = pygame.time.get_ticks()
-                    flipped_cards.clear()
-                    found_pairs.clear()
-                    random.shuffle(cards)
-                    current_player = 1
+                    reset_game()
                     game_over = False  # Reset game over status
             elif reset_button_rect.collidepoint(mouse_pos):
                 # Reset game logic
