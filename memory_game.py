@@ -1,6 +1,78 @@
 import pygame
 import random
 import sys
+from vosk import Model, KaldiRecognizer
+import sys
+import json
+import os
+import queue
+import sounddevice as sd
+import threading
+
+q = queue.Queue()
+
+
+# Voice command mode configuration:
+def callback(indata, frames, time, status):
+    """This is called from a separate thread for each audio block."""
+    if status:
+        print(status, file=sys.stderr)
+    q.put(bytes(indata))
+
+
+def recognize_from_microphone(model_path='vosk-model-small-en-us-0.15'):
+    model = Model(model_path)
+    recognizer = KaldiRecognizer(model, 16000)
+
+    with sd.RawInputStream(samplerate=16000, blocksize=8000, device=None, dtype='int16',
+                           channels=1, callback=callback):
+        print("Voice control activated. Say the number of the card to flip.")
+        while True:
+            data = q.get()
+            if recognizer.AcceptWaveform(data):
+                result = json.loads(recognizer.Result())
+                text = result.get('text', '')
+                text = text_num_convertor(text)
+                if text.isdigit():  # Check if the recognized text is a number
+                    pygame.event.post(pygame.event.Event(pygame.USEREVENT, {'text': text}))
+
+
+def text_num_convertor(text: str):
+    match text:
+        case "one":
+            return '1'
+        case "two":
+            return '2'
+        case "three":
+            return '3'
+        case "for":
+            return '4'
+        case "five":
+            return '5'
+        case "six":
+            return '6'
+        case "seven":
+            return '7'
+        case "eight":
+            return '8'
+        case "nine":
+            return '9'
+        case "ten":
+            return '10'
+        case "eleven":
+            return '11'
+        case "twelve":
+            return '12'
+        case "thirteen":
+            return '13'
+        case "fourteen":
+            return '14'
+        case "fifteen":
+            return '15'
+        case 'sixteen':
+            return '16'
+    return ''
+
 
 # Initialize Pygame
 pygame.init()
@@ -14,6 +86,7 @@ match_sound = pygame.mixer.Sound("chimes.wav")
 # Font initiation
 pygame.font.init()  # Initialize font module
 font = pygame.font.SysFont(None, 36)  # Create a font object
+
 
 # Screen setup
 SCREEN_WIDTH, SCREEN_HEIGHT = 940, 480
@@ -35,7 +108,6 @@ pygame.time.set_timer(TIMEREVENT, 1000)
 time_attack_mode = False
 time_left = 60  # Start with 60 seconds
 
-
 # Define the reset button dimensions and position
 reset_button_color = (70, 130, 180)  # SteelBlue color
 reset_button_rect = pygame.Rect(SCREEN_WIDTH - 150, SCREEN_HEIGHT - 50, 140, 40)  # Position and size
@@ -52,9 +124,10 @@ current_player = 1  # Start with player 1
 
 # Define buttons for choosing game mode
 mode_buttons = {
-    '1 Player': pygame.Rect(50, SCREEN_HEIGHT // 2, 140, 40),
-    '2 Players': pygame.Rect(250, SCREEN_HEIGHT // 2, 140, 40),
-    'Time Attack': pygame.Rect(450, SCREEN_HEIGHT // 2, 140, 40)
+    '1 Player': pygame.Rect(50, SCREEN_HEIGHT // 2, 180, 40),
+    '2 Players': pygame.Rect(250, SCREEN_HEIGHT // 2, 180, 40),
+    'Time Attack': pygame.Rect(450, SCREEN_HEIGHT // 2, 180, 40),
+    'Voice Control': pygame.Rect(650, SCREEN_HEIGHT // 2, 180, 40)
 }
 
 # Cards setup
@@ -64,10 +137,33 @@ CARDS_PER_ROW = 8
 card_positions = [(x * (CARD_SIZE[0] + 10) + 50, y * (CARD_SIZE[1] + 10) + 40) for y in range(2) for x in
                   range(CARDS_PER_ROW)]
 cards = []
+card_index = 0
 for color in CARD_COLORS[:NUM_PAIRS]:
     cards.append({'color': color, 'flipped': False, 'animating': False, 'width': CARD_SIZE[0], 'front': True})
     cards.append({'color': color, 'flipped': False, 'animating': False, 'width': CARD_SIZE[0], 'front': True})
 random.shuffle(cards)
+
+
+# Load the card back image
+def load_card_images(path):
+    """Load all card images from the specified directory and return a list of images."""
+    images = []
+    # List all files in the directory and sort them to ensure correct order
+    file_list = os.listdir(path)
+    print(file_list)
+    for file_name in file_list:
+        if file_name.endswith('.jpg'):  # Check for PNG files (or change to match your file type)
+            full_path = os.path.join(path, file_name)
+            image = pygame.image.load(full_path).convert()  # Use convert_alpha to preserve transparency
+            image = pygame.transform.scale(image, CARD_SIZE)  # Scale image to match card size
+            images.append(image)
+    return images
+
+
+# Load images at the start of your game
+card_back_images = load_card_images('cardImages')
+
+
 
 # Game variables
 flipped_cards = []
@@ -90,13 +186,11 @@ def draw_board():
     screen.fill(BG_COLOR)
     for index, position in enumerate(card_positions):
         card = cards[index]
-        if card['flipped'] or not card['front']:
-            color_card = card['color']
-        else:
-            color_card = CARD_BACK_COLOR
-
         pos_x = position[0] + (CARD_SIZE[0] - card['width']) // 2
-        pygame.draw.rect(screen, color_card, (pos_x, position[1], card['width'], CARD_SIZE[1]))
+        if card['flipped'] or not card['front']:
+            pygame.draw.rect(screen, card['color'], (pos_x, position[1], card['width'], CARD_SIZE[1]))
+        else:
+            screen.blit(card_back_images[index], (pos_x, position[1]))
 
         if card['animating']:
             animate_card(index)
@@ -287,11 +381,18 @@ while not mode_selected:
             mouse_pos = pygame.mouse.get_pos()
             for text, rect in mode_buttons.items():
                 if rect.collidepoint(mouse_pos):
-                    if text == '1 Player': num_players = 1
-                    elif text == '2 Players': num_players = 2
+                    if text == '1 Player':
+                        num_players = 1
+                    elif text == '2 Players':
+                        num_players = 2
                     elif text == 'Time Attack':
                         num_players = 1
                         time_attack_mode = True
+                    elif text == 'Voice Control':
+                        num_players = 1
+                        voice_control_mode = True
+                        threading.Thread(
+                            target=recognize_from_microphone).start()  # Start voice control in a separate thread
                     mode_selected = True
                     break
 
@@ -307,9 +408,16 @@ while running:
     # Inside game loop
 
     for event in pygame.event.get():
-        if event.type == pygame.QUIT:
+        if event.type == pygame.USEREVENT:  # Handles the logic of the voice commmand mode
+            if 'text' in event.dict:
+                card_number = int(event.dict['text']) - 1  # Convert 1-based to 0-based index
+                print(card_number)
+                if 0 <= card_number < len(card_positions):
+                    mouse_pos = card_positions[card_number]  # Simulate a mouse position at the center of the card
+                    game_logic((mouse_pos[0] + CARD_SIZE[0] // 2, mouse_pos[1] + CARD_SIZE[1] // 2))
+        elif event.type == pygame.QUIT:
             running = False
-        elif event.type == pygame.MOUSEBUTTONDOWN:
+        elif event.type == pygame.MOUSEBUTTONDOWN:  # Clicked on every other mode
             mouse_pos = pygame.mouse.get_pos()
             if check_game_over():
                 if play_again_button_rect.collidepoint(mouse_pos):
